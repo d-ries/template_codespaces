@@ -21,5 +21,9 @@
 
   "security.workspace.trust.enabled": true,
   "security.workspace.trust.startupPrompt": "never",
-  "security.workspace.trust.banner": "never"
+  "security.workspace.trust.banner": "never",
+
+  "files.eol": "\n",
+  "files.autoGuessEncoding": false
+
 }
