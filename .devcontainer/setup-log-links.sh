@@ -33,6 +33,12 @@ AUDIT_FILE="$REPO_ROOT/audit.md"
 echo "# Examen Audit Report" > "$AUDIT_FILE"
 echo "" >> "$AUDIT_FILE"
 
+ALLOWED_EXTENSIONS="\
+github.github-vscode-theme
+github.vscode-pull-request-github
+github.codespaces
+amazonwebservices.aws-toolkit-vscode
+"
             
 # Check 1: GitHub Copilot Chat log
 echo "## Copilot Gebruik" >> "$AUDIT_FILE"
@@ -51,7 +57,8 @@ if [ -f "$REPO_ROOT/.logs/remoteagent.log" ]; then
     echo "Remote agent log gevonden. Controleren op anomalieën..." >> "$AUDIT_FILE"
     echo "" >> "$AUDIT_FILE"
     
-    EXTENSION_INSTALLS=$(grep -i "installing extension\|extension.*installed" "$REPO_ROOT/.logs/remoteagent.log" 2>/dev/null | grep -v "pixel-lint" || echo "")
+    RAW_EXT_INSTALLS=$(grep -i "installing extension\|extension.*installed" "$REPO_ROOT/.logs/remoteagent.log" 2>/dev/null | grep -v "pixel-lint" || echo "")
+    EXTENSION_INSTALLS=$(echo "$RAW_EXT_INSTALLS" | grep -ivFf <(echo "$ALLOWED_EXTENSIONS") || echo "")
     
     if [ -n "$EXTENSION_INSTALLS" ]; then
         INSTALL_COUNT=$(echo "$EXTENSION_INSTALLS" | wc -l)
@@ -103,9 +110,10 @@ echo "| Commit | Regels toegevoegd | Bericht |" >> "$AUDIT_FILE"
 echo "|--------|-------------------|---------|" >> "$AUDIT_FILE"
 
 git log --all --pretty=format:"%h|%s" --numstat -- ':!.logs' | awk '
-BEGIN { hash=""; msg=""; added=0 }
-/^[0-9a-f]+\|/ { 
-    if (hash != "") {
+BEGIN { hash=""; msg=""; added=0; skip=0 }
+/^[0-9a-f]+\|/ {
+    # Print previous commit unless it was an initial commit
+    if (hash != "" && skip == 0) {
         if (added > 100) {
             printf "| 🔴 **%s** | **%d** | %s |\n", hash, added, msg
         } else if (added > 50) {
@@ -114,12 +122,22 @@ BEGIN { hash=""; msg=""; added=0 }
             printf "| %s | %d | %s |\n", hash, added, msg
         }
     }
+
     split($0, a, "|")
-    hash=a[1]; msg=a[2]; added=0
+    hash=a[1]
+    msg=a[2]
+
+    # Detecteer initial commit (case-insensitive)
+    skip = (tolower(msg) ~ /initial commit/) ? 1 : 0
+
+    added=0
 }
-/^[0-9]+\t[0-9]+\t/ { added+=$1 }
-END { 
-    if (hash != "") {
+# Numstat regels
+/^[0-9]+\t[0-9]+\t/ {
+    if (skip == 0) added += $1
+}
+END {
+    if (hash != "" && skip == 0) {
         if (added > 100) {
             printf "| 🔴 **%s** | **%d** | %s |\n", hash, added, msg
         } else if (added > 50) {
@@ -134,13 +152,26 @@ END {
 echo "" >> "$AUDIT_FILE"
 
 # Summary statistics
-TOTAL_COMMITS=$(git rev-list --all --count)
-TOTAL_ADDED=$(git log --all --numstat --pretty=format:"" | awk '{added+=$1} END {print added}')
+TOTAL_COMMITS=$(git log --all --pretty=format:"%s" | grep -iv "initial commit" | wc -l)
+
+TOTAL_ADDED=$(
+    git log --all --numstat --pretty=format:"%s" |
+    awk '
+        /^[0-9]+\t[0-9]+\t/ && skip==0 { total+=$1 }
+        /^[^0-9]/ {
+            msg=$0
+            skip = tolower(msg) ~ /initial commit/ ? 1 : 0
+        }
+        END { print total+0 }
+    '
+)
+
 if [ "$TOTAL_COMMITS" -gt 0 ]; then
     AVG_ADDED=$((TOTAL_ADDED / TOTAL_COMMITS))
 else
     AVG_ADDED=0
 fi
+
 
 echo "## Statistieken" >> "$AUDIT_FILE"
 echo "" >> "$AUDIT_FILE"
@@ -150,7 +181,22 @@ echo "- **Gemiddeld per commit:** $AVG_ADDED regels" >> "$AUDIT_FILE"
 echo "" >> "$AUDIT_FILE"
 
 # Flag suspicious patterns
-LARGE_COMMITS=$(git log --all --numstat | awk '/^[0-9]+\t/ {if($1>100) count++} END {print count+0}')
+LARGE_COMMITS=$(
+    git log --all --pretty=format:"%h|%s" --numstat |
+    awk '
+        BEGIN { hash=""; skip=0 }
+        /^[0-9a-f]+\|/ {
+            # Nieuw commit: check of initial commit
+            split($0, a, "|")
+            msg = tolower(a[2])
+            skip = (msg ~ /initial commit/) ? 1 : 0
+        }
+        /^[0-9]+\t[0-9]+\t/ {
+            if (skip == 0 && $1 > 100) count++
+        }
+        END { print count+0 }
+    '
+)
 if [ "$LARGE_COMMITS" -gt 0 ]; then
     echo "⚠️ **WAARSCHUWING:** $LARGE_COMMITS commit(s) met meer dan 100 regels toegevoegd (mogelijk AI-gegenereerd)" >> "$AUDIT_FILE"
 fi
