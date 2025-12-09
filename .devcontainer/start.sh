@@ -1,4 +1,5 @@
 #!/bin/bash
+chmod 400 /home/codespace/.vscode-remote/extensions
 # setup log links
 LOG_SCRIPT_PATH=$(find /workspaces -name "setup-log-links.sh" -type f 2>/dev/null | head -n 1)
 bash "$LOG_SCRIPT_PATH"
