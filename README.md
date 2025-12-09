@@ -13,10 +13,11 @@ You are now ready to copy this template to your classroom organisation and start
 
 ## Features
 This Codespace configuration will:
-- Uninstall any co-pilot or AI plugins on startup
+- Uninstall any co-pilot or AI plugins on startup.
+- prohibit extension installations by making the extensions directory read-only.
 - Monitor extension installs and report any installs / uninstalls.
 - Add Codespaces / IDE / AI Chat logs to the repository in the `.logs` folder trough pre-commit hooks. _Note: make sure any `.gitignore` file does not include a `.logs` entry._
-- Auto commit all changes every 5 minutes
+- Auto commit all changes every 5 minutes.
 - Generates an `audit.md` file that contains a report of above findings along with an overview of the amount of lines added per commit.
 
 By default this Codespaces uses a universal base devcontainer image (see `.devcontainer/devcontainer.json`). This takes quite some time to load. It might be interesting to change this so a specific (smaller) one that fits your needs. For a full list of available pre-made images see: https://github.com/devcontainers/images/tree/main/src and https://containers.dev/templates. For a list of extra features you can add see: https://github.com/devcontainers/features/tree/main
@@ -24,4 +25,5 @@ By default this Codespaces uses a universal base devcontainer image (see `.devco
 # Opgave PE
 
 Voorzie hier instructies wat de student juist moet maken.
+
 
